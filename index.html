@@ -1,0 +1,1227 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>身近な家電で学ぶ！論理回路クエスト</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <style>
+    body { user-select: none; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .workspace {
+      background-color: #f8fafc;
+      background-image: radial-gradient(#cbd5e1 1.5px, transparent 1.5px);
+      background-size: 20px 20px;
+    }
+    .node {
+      width: 14px; height: 14px; border-radius: 50%;
+      background: #94a3b8; border: 2px solid #475569;
+      position: absolute; cursor: pointer; transition: transform 0.15s, background-color 0.15s; z-index: 30;
+    }
+    .node:hover { transform: scale(1.4); }
+    .node.input-node { left: -7px; }
+    .node.output-node { right: -7px; }
+    .node.active { background: #ef4444; border-color: #991b1b; box-shadow: 0 0 6px rgba(239, 68, 68, 0.8); }
+    .bulb-on { color: #f59e0b; filter: drop-shadow(0 0 12px rgba(245, 158, 11, 0.9)); }
+    @keyframes clearPop {
+      0% { transform: scale(0.5); opacity: 0; }
+      50% { transform: scale(1.1); }
+      100% { transform: scale(1); opacity: 1; }
+    }
+    .animate-clear { animation: clearPop 0.4s ease-out forwards; }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col">
+
+  <!-- クリア時ポップアップ -->
+  <div id="clearOverlay" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div class="bg-white rounded-3xl p-8 border-4 border-amber-400 shadow-2xl text-center max-w-md animate-clear">
+      <div class="w-20 h-20 bg-amber-100 text-amber-500 rounded-full flex items-center justify-center mx-auto mb-4 text-4xl shadow-inner">
+        <i class="fa-solid fa-trophy"></i>
+      </div>
+      <h2 class="text-2xl font-black text-slate-800 mb-1">MISSION CLEAR!!</h2>
+      <p class="text-xs text-slate-500 mb-6">見事！条件に合致する正確な論理回路を構築できました！</p>
+      <div class="flex flex-col gap-2">
+        <button onclick="nextStage()" class="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-3 rounded-xl shadow-lg shadow-emerald-500/30 transition">
+          次のミッションへ挑戦 <i class="fa-solid fa-arrow-right ml-1"></i>
+        </button>
+        <button onclick="dismissClearOverlay()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-2.5 rounded-xl transition text-xs">
+          <i class="fa-solid fa-eye mr-1"></i> 回路を確認する（画面に戻る）
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヒント・答えモーダル -->
+  <div id="hintOverlay" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center">
+    <div class="bg-white rounded-3xl p-6 border border-slate-200 shadow-2xl max-w-md w-full animate-clear">
+      <div class="flex justify-between items-center mb-4">
+        <h3 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+          <i class="fa-solid fa-lightbulb text-amber-500"></i> ヒント ＆ 解答ヒント
+        </h3>
+        <button onclick="closeHint()" class="text-slate-400 hover:text-slate-600 text-lg">✕</button>
+      </div>
+      <div class="space-y-4 mb-6">
+        <div class="bg-amber-50 border border-amber-200 p-3.5 rounded-2xl">
+          <p class="text-xs font-bold text-amber-900 mb-1">💡 回路構成の考え方</p>
+          <p id="modalHintText" class="text-xs text-amber-800 leading-relaxed whitespace-pre-line"></p>
+        </div>
+        <div class="bg-indigo-50 border border-indigo-200 p-3.5 rounded-2xl">
+          <p class="text-xs font-bold text-indigo-900 mb-1">🧩 推奨するゲートパーツ</p>
+          <p id="modalGatesText" class="text-xs text-indigo-800 font-mono"></p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="showAnswer()" class="flex-1 bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 rounded-xl text-xs transition shadow-md shadow-amber-500/20">
+          <i class="fa-solid fa-key mr-1"></i> 答えを表示（模範解答を作成）
+        </button>
+        <button onclick="closeHint()" class="bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold px-4 py-2.5 rounded-xl text-xs transition">
+          閉じる
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ヘッダー -->
+  <header class="bg-white border-b border-slate-200 px-6 py-2.5 flex justify-between items-center shadow-sm shrink-0">
+    <div class="flex items-center gap-3">
+      <div class="bg-blue-600 text-white p-2 rounded-xl shadow-md shadow-blue-500/20">
+        <i class="fa-solid fa-house-laptop text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold text-slate-800">身近な家電で学ぶ！論理回路クエスト</h1>
+        <p class="text-[11px] text-slate-500">高校「情報Ⅰ」対応 - 論理演算・論理回路シミュレータ (全15ステージ)</p>
+      </div>
+    </div>
+
+    <!-- ステージ選択 -->
+    <div class="flex items-center gap-2 bg-slate-100 p-1.5 rounded-2xl border border-slate-200">
+      <span class="text-xs font-bold text-slate-500 pl-2"><i class="fa-solid fa-list-check text-blue-500"></i> ミッション:</span>
+      <select id="stageSelect" onchange="changeStage()" class="bg-white text-xs font-bold text-slate-700 px-3 py-1.5 rounded-xl border border-slate-200 shadow-xs focus:outline-none">
+        <option value="0">自由作成モード（フリー実験）</option>
+        <option value="1">STAGE 1: 自動ドア（基本配線）</option>
+        <option value="2">STAGE 2: 冷蔵庫アラーム（NOT回路）</option>
+        <option value="3">STAGE 3: 自動街灯（AND回路）</option>
+        <option value="4">STAGE 4: 火災警報器（OR回路）</option>
+        <option value="5">STAGE 5: スマートエアコン（AND + OR）</option>
+        <option value="6">STAGE 6: 温室の自動換気（NOT + AND + OR）</option>
+        <option value="7">STAGE 7: 高級車のアラーム（3条件複合）</option>
+        <option value="8">STAGE 8: 銀行ATM不正保護（複合論理）</option>
+        <option value="9">STAGE 9: 金庫の多段階ロック（分岐・結合回路）</option>
+        <option value="10">STAGE 10: 自動運転AIブレーキ（高精度制御）</option>
+        <option value="11">STAGE 11: 階段の3路スイッチ（XOR回路）</option>
+        <option value="12">STAGE 12: スマートホーム防犯（NAND + XOR）</option>
+        <option value="13">STAGE 13: 洗濯機安全ロック（NAND + AND + OR）</option>
+        <option value="14">STAGE 14: ロボット掃除機AI（XOR + NOR + AND）</option>
+        <option value="15">STAGE 15: 生体認証セキュリティゲート（複合論理最難関）</option>
+      </select>
+    </div>
+
+    <div class="flex gap-2">
+      <button onclick="shareState()" class="bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-share-nodes"></i> URL共有
+      </button>
+      <button onclick="resetStage()" class="bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 text-xs font-bold px-3.5 py-2 rounded-xl transition flex items-center gap-1.5 shadow-sm">
+        <i class="fa-solid fa-rotate-left"></i> リセット
+      </button>
+    </div>
+  </header>
+
+  <!-- 複数行・構造化ミッション解説エリア -->
+  <div id="missionBar" class="bg-indigo-900 text-white border-b border-indigo-950 px-6 py-3 shadow-inner hidden shrink-0">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-start md:items-center gap-3">
+      <div class="flex-1 space-y-1.5">
+        <div class="flex items-center gap-2">
+          <span class="bg-amber-400 text-slate-900 text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider">Mission Target</span>
+          <h2 id="missionTitleText" class="text-sm font-bold text-amber-200"></h2>
+        </div>
+        
+        <!-- 構造化された説明文コンテナ -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 text-[11px] leading-relaxed bg-indigo-950/60 p-2.5 rounded-xl border border-indigo-700/50">
+          <div class="md:col-span-1">
+            <span class="text-indigo-300 font-bold block mb-0.5"><i class="fa-solid fa-bullseye text-amber-400 mr-1"></i>背景と目的:</span>
+            <p id="missionPurpose" class="text-slate-200"></p>
+          </div>
+          <div class="md:col-span-1">
+            <span class="text-indigo-300 font-bold block mb-0.5"><i class="fa-solid fa-sliders text-blue-400 mr-1"></i>入力条件 (0 / 1):</span>
+            <p id="missionInputs" class="text-slate-200"></p>
+          </div>
+          <div class="md:col-span-1">
+            <span class="text-indigo-300 font-bold block mb-0.5"><i class="fa-solid fa-lightbulb text-yellow-400 mr-1"></i>目指す動作 (出力):</span>
+            <p id="missionGoal" class="text-slate-200 font-semibold"></p>
+          </div>
+          <div class="md:col-span-1">
+            <span class="text-indigo-300 font-bold block mb-0.5"><i class="fa-solid fa-brain text-emerald-400 mr-1"></i>考え方のポイント:</span>
+            <p id="missionHint" class="text-emerald-200"></p>
+          </div>
+        </div>
+      </div>
+
+      <div class="shrink-0">
+        <button onclick="openHint()" class="bg-amber-400 hover:bg-amber-300 text-slate-900 text-xs font-black px-4 py-2.5 rounded-xl transition flex items-center gap-1.5 shadow-md">
+          <i class="fa-solid fa-lightbulb text-slate-800"></i> ヒント＆答え
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- メインコンテンツ -->
+  <div class="flex-1 flex overflow-hidden">
+    <!-- パレット -->
+    <aside class="w-72 bg-white border-r border-slate-200 p-4 flex flex-col gap-4 shadow-sm z-10 overflow-y-auto shrink-0">
+      <div>
+        <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">パーツをドラッグ＆ドロップ</h2>
+
+        <div class="space-y-2 mb-3">
+          <p class="text-xs font-bold text-slate-600 flex items-center gap-1"><i class="fa-solid fa-sliders text-blue-500"></i> センサー / 出力パーツ</p>
+          <div class="grid grid-cols-2 gap-2">
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'switch')" class="bg-slate-50 hover:bg-blue-50 border border-slate-200 hover:border-blue-300 p-2 rounded-xl cursor-grab flex flex-col items-center justify-center transition shadow-sm">
+              <i class="fa-solid fa-toggle-on text-emerald-500 text-xl mb-1"></i>
+              <span class="text-[11px] font-bold text-slate-700">スイッチ/センサー</span>
+            </div>
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'bulb')" class="bg-slate-50 hover:bg-amber-50 border border-slate-200 hover:border-amber-300 p-2 rounded-xl cursor-grab flex flex-col items-center justify-center transition shadow-sm">
+              <i class="fa-solid fa-lightbulb text-amber-500 text-xl mb-1"></i>
+              <span class="text-[11px] font-bold text-slate-700">ライト / アラーム</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <p class="text-xs font-bold text-slate-600 flex items-center gap-1"><i class="fa-solid fa-microchip text-indigo-500"></i> 論理ICパーツ (Logic Gate)</p>
+          <div class="flex flex-col gap-1.5">
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'AND')" class="bg-blue-50/60 hover:bg-blue-100/80 border border-blue-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-blue-600 text-xs w-12 text-center border border-blue-300 bg-white py-0.5 rounded shadow-xs">AND</span>
+              <div class="text-[10px] font-bold text-slate-700">AND (両方1で1)</div>
+            </div>
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'OR')" class="bg-indigo-50/60 hover:bg-indigo-100/80 border border-indigo-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-indigo-600 text-xs w-12 text-center border border-indigo-300 bg-white py-0.5 rounded shadow-xs">OR</span>
+              <div class="text-[10px] font-bold text-slate-700">OR (片方でも1で1)</div>
+            </div>
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'NOT')" class="bg-purple-50/60 hover:bg-purple-100/80 border border-purple-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-purple-600 text-xs w-12 text-center border border-purple-300 bg-white py-0.5 rounded shadow-xs">NOT</span>
+              <div class="text-[10px] font-bold text-slate-700">NOT (信号反転 0⇔1)</div>
+            </div>
+            <!-- 追加パーツ -->
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'XOR')" class="bg-teal-50/60 hover:bg-teal-100/80 border border-teal-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-teal-600 text-xs w-12 text-center border border-teal-300 bg-white py-0.5 rounded shadow-xs">XOR</span>
+              <div class="text-[10px] font-bold text-slate-700">XOR (片方のみ1で1)</div>
+            </div>
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'NAND')" class="bg-rose-50/60 hover:bg-rose-100/80 border border-rose-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-rose-600 text-xs w-12 text-center border border-rose-300 bg-white py-0.5 rounded shadow-xs">NAND</span>
+              <div class="text-[10px] font-bold text-slate-700">NAND (ANDの反転)</div>
+            </div>
+            <div draggable="true" ondragstart="dragStartFromPalette(event, 'NOR')" class="bg-amber-50/60 hover:bg-amber-100/80 border border-amber-200 p-2 rounded-xl cursor-grab flex items-center gap-2 transition shadow-sm">
+              <span class="font-black text-amber-600 text-xs w-12 text-center border border-amber-300 bg-white py-0.5 rounded shadow-xs">NOR</span>
+              <div class="text-[10px] font-bold text-slate-700">NOR (ORの反転)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-auto bg-blue-50 p-3 rounded-xl border border-blue-100 text-[11px] text-slate-600 space-y-1">
+        <p class="font-bold text-blue-900"><i class="fa-solid fa-circle-info text-blue-500"></i> 情報Ⅰワンポイント:</p>
+        <p>XOR（排他的論理和）やNAND/NORは、実際の半導体やコンピュータ基板の回路設計でよく使われます。</p>
+      </div>
+    </aside>
+
+    <!-- ワークスペース -->
+    <main class="flex-1 relative workspace overflow-hidden" id="workspace" ondragover="allowDrop(event)" ondrop="dropFromPalette(event)">
+      <svg id="wireSvg" class="absolute inset-0 w-full h-full pointer-events-none z-10"></svg>
+      <div id="nodesContainer" class="absolute inset-0"></div>
+    </main>
+  </div>
+
+  <script>
+    let components = [];
+    let wires = [];
+    let wireStartNode = null;
+    let nextId = 1;
+
+    let currentStage = 0;
+    let isStageCleared = false;
+    let suppressClearOverlay = false;
+
+    let draggingComponent = null;
+    let dragOffsetX = 0;
+    let dragOffsetY = 0;
+
+    // 高校1年生「情報Ⅰ」向け：全15ステージの構造化詳細説明データ
+    const stages = {
+      1: {
+        title: "STAGE 1 : 自動ドアの配線（基本信号伝送）",
+        purpose: "お店の入口で人が近づくとスッと開く自動ドアを作ります。",
+        inputs: "・人感センサー (1:検知あり / 0:検知なし)",
+        goal: "人感センサーが「1(ON)」のとき、そのまま信号を届けてドアモーターを「1(開)」に動かそう！",
+        point: "回路の基本！センサーの出力ノードとモーターの入力ノードを直接1本の線で繋ぎます。",
+        hint: "人感センサーの右端ノードから、ドアモーターの左端ノードへドラッグして配線してください。",
+        gates: "使用ゲート: なし（直結）",
+        setup: () => {
+          createComponent('switch', 100, 200, '人感センサー');
+          createComponent('bulb', 450, 200, 'ドアモーター');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 100, 200, '人感センサー');
+          const b1 = createComponent('bulb', 450, 200, 'ドアモーター');
+          s1.state = true;
+          wires.push({ from: `${s1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      2: {
+        title: "STAGE 2 : 冷蔵庫の開けっぱなし防止アラーム（NOT回路）",
+        purpose: "冷蔵庫のドアが閉まっているときは静かで、開けたまま（検知0）になると警告灯が点滅します。",
+        inputs: "・ドア状態センサー (1:閉まっている / 0:開いている)",
+        goal: "ドアが開いてセンサーが「0(OFF)」になったときに、アラームを「1(ON)」に作動させよう！",
+        point: "信号を「0から1」「1から0」へと反対にひっくり返す「NOT回路」を間に挟みましょう。",
+        hint: "センサー (0) ➔ [NOT回路] ➔ (1) アラーム の順番に信号が伝わるよう配置します。",
+        gates: "使用ゲート: NOT回路 × 1",
+        setup: () => {
+          createComponent('switch', 100, 200, 'ドア検知 (1:閉/0:開)');
+          createComponent('bulb', 450, 200, '警告アラーム');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 100, 200, 'ドア検知 (1:閉/0:開)');
+          const n1 = createComponent('NOT', 270, 200);
+          const b1 = createComponent('bulb', 450, 200, '警告アラーム');
+          s1.state = false;
+          wires.push({ from: `${s1.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      3: {
+        title: "STAGE 3 : 省エネな自動街灯（AND回路）",
+        purpose: "昼間や誰もいない夜にライトをつけるのは電気の無駄！「暗い」＆「人がいる」ときだけ点滅させます。",
+        inputs: "・周囲の暗さ (1:暗い) / ・人感センサー (1:人あり)",
+        goal: "2つの条件が「【両方とも1】」のときだけ、自動街灯を「1(点灯)」させよう！",
+        point: "入力が「1と1」のペアになった時だけ「1」を出力するのが「AND回路」の役割です。",
+        hint: "2つのスイッチの出力を「AND回路」の2つの入力ノードにそれぞれ接続してください。",
+        gates: "使用ゲート: AND回路 × 1",
+        setup: () => {
+          createComponent('switch', 80, 140, '周囲の暗さ (1:暗い)');
+          createComponent('switch', 80, 260, '人感センサー (1:人あり)');
+          createComponent('bulb', 480, 200, '自動街灯');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 80, 140, '周囲の暗さ (1:暗い)');
+          const s2 = createComponent('switch', 80, 260, '人感センサー (1:人あり)');
+          const a1 = createComponent('AND', 280, 200);
+          const b1 = createComponent('bulb', 480, 200, '自動街灯');
+          s1.state = true; s2.state = true;
+          wires.push({ from: `${s1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      4: {
+        title: "STAGE 4 : 火災警報システム（OR回路）",
+        purpose: "火災の危険があるとき、熱を検知したときでも手動でボタンを押したときでもベルを鳴らします。",
+        inputs: "・熱センサー (1:火災検知) / ・非常ボタン (1:手動押下)",
+        goal: "どちらか「【片方だけでも1】」になれば、即座に非常ベルを「1(発報)」させよう！",
+        point: "どちらかの入力が「1」であれば「1」を出力するのが「OR回路」の特徴です。",
+        hint: "2つのセンサー信号を「OR回路」に入力し、その出力を非常ベルに繋ぎます。",
+        gates: "使用ゲート: OR回路 × 1",
+        setup: () => {
+          createComponent('switch', 80, 140, '熱センサー (1:火災)');
+          createComponent('switch', 80, 260, '非常ボタン (1:押下)');
+          createComponent('bulb', 480, 200, '非常ベル');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 80, 140, '熱センサー (1:火災)');
+          const s2 = createComponent('switch', 80, 260, '非常ボタン (1:押下)');
+          const o1 = createComponent('OR', 280, 200);
+          const b1 = createComponent('bulb', 480, 200, '非常ベル');
+          s1.state = true; s2.state = false;
+          wires.push({ from: `${s1.id}_out_0`, to: `${o1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${o1.id}_in_1` });
+          wires.push({ from: `${o1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      5: {
+        title: "STAGE 5 : スマートエアコン制御（AND + OR）",
+        purpose: "電気のメイン電源が入っていて、さらに部屋が「暑い」か「ジメジメしている」時に冷房をオンにします。",
+        inputs: "・メイン電源 (1:ON) / ・高温センサー (1:暑い) / ・高湿センサー (1:湿気あり)",
+        goal: "「メイン電源=1」かつ「(高温 OR 高湿)=1」のときにエアコン冷房を「1」に作動させよう！",
+        point: "まず「高温」と「高湿」をOR回路でまとめ、その出力結果と「電源」をAND回路で組み合わせます。",
+        hint: "高温と高湿をOR回路でつなぎ、その結果とメイン電源をAND回路で判定させましょう。",
+        gates: "使用ゲート: OR回路 × 1, AND回路 × 1",
+        setup: () => {
+          createComponent('switch', 60, 100, 'メイン電源 (1:ON)');
+          createComponent('switch', 60, 200, '高温センサー (1:暑い)');
+          createComponent('switch', 60, 300, '高湿センサー (1:湿気あり)');
+          createComponent('bulb', 520, 200, 'エアコン冷房');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 60, 100, 'メイン電源 (1:ON)');
+          const s2 = createComponent('switch', 60, 200, '高温センサー (1:暑い)');
+          const s3 = createComponent('switch', 60, 300, '高湿センサー (1:湿気あり)');
+          const o1 = createComponent('OR', 230, 250);
+          const a1 = createComponent('AND', 380, 180);
+          const b1 = createComponent('bulb', 520, 200, 'エアコン冷房');
+          s1.state = true; s2.state = true; s3.state = false;
+          wires.push({ from: `${s2.id}_out_0`, to: `${o1.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${o1.id}_in_1` });
+          wires.push({ from: `${s1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${o1.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      6: {
+        title: "STAGE 6 : 植物温室の自動換気ファン（NOT + AND + OR）",
+        purpose: "「手動ボタンがON」または「【高温(1)】かつ【乾燥している(湿度0)】」ときに換気ファンを回します。",
+        inputs: "・手動スイッチ (1:ON) / ・高温検知 (1:高温) / ・湿度検知 (1:高湿/0:乾燥)",
+        goal: "手動ONまたは「高温 AND (NOT 湿度)」が成立したときに換気ファンを「1」で回転させよう！",
+        point: "「湿度0（乾燥）」をNOT回路で「1」に変換してから、高温検知とAND回路で組み合わせます。",
+        hint: "湿度検知➔NOT回路➔AND回路(高温と結合)➔OR回路(手動スイッチと結合)の順に設計します。",
+        gates: "使用ゲート: NOT回路 × 1, AND回路 × 1, OR回路 × 1",
+        setup: () => {
+          createComponent('switch', 60, 80, '手動換気SW (1:ON)');
+          createComponent('switch', 60, 180, '高温検知 (1:高温)');
+          createComponent('switch', 60, 280, '湿度検知 (1:高湿/0:乾燥)');
+          createComponent('bulb', 540, 180, '換気ファン');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 60, 80, '手動換気SW (1:ON)');
+          const s2 = createComponent('switch', 60, 180, '高温検知 (1:高温)');
+          const s3 = createComponent('switch', 60, 280, '湿度検知 (1:高湿/0:乾燥)');
+          const n1 = createComponent('NOT', 210, 280);
+          const a1 = createComponent('AND', 340, 220);
+          const o1 = createComponent('OR', 450, 150);
+          const b1 = createComponent('bulb', 580, 180, '換気ファン');
+          s1.state = false; s2.state = true; s3.state = false;
+          wires.push({ from: `${s3.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${s1.id}_out_0`, to: `${o1.id}_in_0` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${o1.id}_in_1` });
+          wires.push({ from: `${o1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      7: {
+        title: "STAGE 7 : 高級車盗難防止アラーム（3条件複合）",
+        purpose: "「防犯警戒ON(1)」で「車体に衝撃あり(1)」かつ「近くに所有者のキーがない(0)」ときに警報を鳴らします。",
+        inputs: "・セキュリティ状態 (1:ON) / ・衝撃センサー (1:検知) / ・スマートキー (1:あり/0:なし)",
+        goal: "3つの条件「セキュリティ1 AND 衝撃1 AND (NOT スマートキー1)」が揃ったときアラームを「1」にしよう！",
+        point: "「スマートキー(0)」をNOT回路で反転させ、3つの条件をAND回路を2個使って段階的に判定します。",
+        hint: "「セキュリティ」と「衝撃」を1目のAND回路で繋ぎ、その出力と「NOTキー」を2目のAND回路で繋ぎます。",
+        gates: "使用ゲート: NOT回路 × 1, AND回路 × 2",
+        setup: () => {
+          createComponent('switch', 50, 80, 'セキュリティ (1:ON)');
+          createComponent('switch', 50, 180, '衝撃センサー (1:あり)');
+          createComponent('switch', 50, 280, 'スマートキー (1:あり/0:無)');
+          createComponent('bulb', 560, 180, '防犯アラーム');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 50, 80, 'セキュリティ (1:ON)');
+          const s2 = createComponent('switch', 50, 180, '衝撃センサー (1:あり)');
+          const s3 = createComponent('switch', 50, 280, 'スマートキー (1:あり/0:無)');
+          const n1 = createComponent('NOT', 200, 280);
+          const a1 = createComponent('AND', 320, 120);
+          const a2 = createComponent('AND', 440, 180);
+          const b1 = createComponent('bulb', 580, 180, '防犯アラーム');
+          s1.state = true; s2.state = true; s3.state = false;
+          wires.push({ from: `${s3.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${s1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${a2.id}_in_0` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${a2.id}_in_1` });
+          wires.push({ from: `${a2.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      8: {
+        title: "STAGE 8 : 銀行ATMの不正送金プロテクト（複合セキュリティ）",
+        purpose: "「緊急停止ボタンが押されていない(0)」「暗証番号一致(1)」かつ「指紋成功(1)または少額取引(高額でない0)」で送金許可。",
+        inputs: "・緊急停止 (1:押下/0:正常) / ・暗証番号 (1:一致) / ・指紋照合 (1:成功) / ・高額送金 (1:高額/0:少額)",
+        goal: "安全条件がクリアされたときのみ取引許可ランプを「1」に点灯させよう！",
+        point: "「緊急停止なし(0➔1)」と「少額(0➔1)」をNOT回路で反転させてからロジックを組み立てます。",
+        hint: "NOT回路で反転させた「停止なし」と「PIN一致」をANDでまとめ、生体情報/金額判定（OR回路）とさらにANDで繋ぎます。",
+        gates: "使用ゲート: NOT回路 × 2, OR回路 × 1, AND回路 × 2",
+        setup: () => {
+          createComponent('switch', 40, 60, '緊急停止 (1:停止/0:正常)');
+          createComponent('switch', 40, 140, '暗証番号 (1:一致)');
+          createComponent('switch', 40, 220, '指紋照合 (1:成功)');
+          createComponent('switch', 40, 300, '高額送金 (1:高額/0:少額)');
+          createComponent('bulb', 580, 180, '取引許可ランプ');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 40, 60, '緊急停止 (1:停止/0:正常)');
+          const s2 = createComponent('switch', 40, 140, '暗証番号 (1:一致)');
+          const s3 = createComponent('switch', 40, 220, '指紋照合 (1:成功)');
+          const s4 = createComponent('switch', 40, 300, '高額送金 (1:高額/0:少額)');
+          const n1 = createComponent('NOT', 180, 60);
+          const n2 = createComponent('NOT', 180, 300);
+          const o1 = createComponent('OR', 300, 260);
+          const a1 = createComponent('AND', 320, 100);
+          const a2 = createComponent('AND', 450, 180);
+          const b1 = createComponent('bulb', 600, 180, '取引許可ランプ');
+          s1.state = false; s2.state = true; s3.state = false; s4.state = false;
+          wires.push({ from: `${s1.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${n2.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${o1.id}_in_0` });
+          wires.push({ from: `${n2.id}_out_0`, to: `${o1.id}_in_1` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${a2.id}_in_0` });
+          wires.push({ from: `${o1.id}_out_0`, to: `${a2.id}_in_1` });
+          wires.push({ from: `${a2.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      9: {
+        title: "STAGE 9 : 大手銀行金庫の多重ロック解錠（分岐＆結合回路）",
+        purpose: "解錠方法A「マスターキー(1)＆PIN(1)」または解錠方法B「営業時間内(1)＆PIN(1)＆(指紋1 OR 静脈1)」で開く金庫。",
+        inputs: "・マスターキー / ・暗証番号一致 / ・営業時間内 / ・指紋一致 / ・静脈一致 (全て1:成立)",
+        goal: "2つの経路（ルートA または ルートB）のどちらか一方でも成り立てば金庫ロック解除を「1」にしよう！",
+        point: "ルートA（AND）とルートB（複合AND/OR）の出力を、最後のOR回路で1つに統合します。",
+        hint: "バイオ生体認証（指紋 OR 静脈）をまとめてから営業時間・暗証番号とAND結合し、最後をORでまとめます。",
+        gates: "使用ゲート: OR回路 × 2, AND回路 × 3",
+        setup: () => {
+          createComponent('switch', 40, 50, 'マスターキー (1:有)');
+          createComponent('switch', 40, 120, '暗証番号 (1:一致)');
+          createComponent('switch', 40, 190, '営業時間内 (1:内)');
+          createComponent('switch', 40, 260, '指紋一致 (1:一致)');
+          createComponent('switch', 40, 330, '静脈一致 (1:一致)');
+          createComponent('bulb', 600, 190, '金庫ロック解除');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 40, 50, 'マスターキー (1:有)');
+          const s2 = createComponent('switch', 40, 120, '暗証番号 (1:一致)');
+          const s3 = createComponent('switch', 40, 190, '営業時間内 (1:内)');
+          const s4 = createComponent('switch', 40, 260, '指紋一致 (1:一致)');
+          const s5 = createComponent('switch', 40, 330, '静脈一致 (1:一致)');
+
+          const aA = createComponent('AND', 220, 70);
+          const oBio = createComponent('OR', 180, 290);
+          const aB1 = createComponent('AND', 290, 220);
+          const aB2 = createComponent('AND', 400, 240);
+          const oFinal = createComponent('OR', 500, 180);
+          const b1 = createComponent('bulb', 620, 190, '金庫ロック解除');
+
+          s1.state = true; s2.state = true; s3.state = false; s4.state = false; s5.state = false;
+
+          wires.push({ from: `${s1.id}_out_0`, to: `${aA.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${aA.id}_in_1` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${oBio.id}_in_0` });
+          wires.push({ from: `${s5.id}_out_0`, to: `${oBio.id}_in_1` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${aB1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${aB1.id}_in_1` });
+          wires.push({ from: `${aB1.id}_out_0`, to: `${aB2.id}_in_0` });
+          wires.push({ from: `${oBio.id}_out_0`, to: `${aB2.id}_in_1` });
+          wires.push({ from: `${aA.id}_out_0`, to: `${oFinal.id}_in_0` });
+          wires.push({ from: `${aB2.id}_out_0`, to: `${oFinal.id}_in_1` });
+          wires.push({ from: `${oFinal.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      10: {
+        title: "STAGE 10 : 自動運転AIの緊急ブレーキ（高精度フェイルセーフ）",
+        purpose: "物理的な回線断線エラーがなく(0)、かつ「ドライバーの手動ブレーキ(1)」または「(障害物1 ＆ AIアシスト1 ＆ システムエラー無0)」で自動ブレーキ作動。",
+        inputs: "・回路断線 (1:異常/0:正常) / ・手動ブレーキ / ・前方障害物 / ・自動運転モード / ・システムエラー (1:異常/0:正常)",
+        goal: "万が一の誤作動を防ぎ、必要な場面で確実に止まる緊急自動ブレーキ回路を組み上げよう！",
+        point: "「断線なし(0➔1)」と「エラーなし(0➔1)」のNOT判定を確実に行い、安全性が担保された場合のみ判定を通過させます。",
+        hint: "AIブレーキ発動条件(AND複合)と手動判定をORで結合し、最後に断線チェック(NOT)とAND接続します。",
+        gates: "使用ゲート: NOT回路 × 2, AND回路 × 3, OR回路 × 1",
+        setup: () => {
+          createComponent('switch', 40, 40, '回路断線 (1:異常/0:正常)');
+          createComponent('switch', 40, 110, '手動ブレーキ (1:押下)');
+          createComponent('switch', 40, 180, '前方障害物 (1:検知)');
+          createComponent('switch', 40, 250, '自動運転モード (1:ON)');
+          createComponent('switch', 40, 320, 'システムエラー (1:有/0:無)');
+          createComponent('bulb', 620, 180, '緊急自動ブレーキ');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 40, 40, '回路断線 (1:異常/0:正常)');
+          const s2 = createComponent('switch', 40, 110, '手動ブレーキ (1:押下)');
+          const s3 = createComponent('switch', 40, 180, '前方障害物 (1:検知)');
+          const s4 = createComponent('switch', 40, 250, '自動運転モード (1:ON)');
+          const s5 = createComponent('switch', 40, 320, 'システムエラー (1:有/0:無)');
+
+          const n1 = createComponent('NOT', 180, 40);
+          const n5 = createComponent('NOT', 180, 320);
+          const aAuto1 = createComponent('AND', 220, 210);
+          const aAuto2 = createComponent('AND', 340, 250);
+          const oCondition = createComponent('OR', 420, 150);
+          const aFinal = createComponent('AND', 520, 170);
+          const b1 = createComponent('bulb', 640, 180, '緊急自動ブレーキ');
+
+          s1.state = false; s2.state = true; s3.state = false; s4.state = false; s5.state = false;
+
+          wires.push({ from: `${s1.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${s5.id}_out_0`, to: `${n5.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${aAuto1.id}_in_0` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${aAuto1.id}_in_1` });
+          wires.push({ from: `${aAuto1.id}_out_0`, to: `${aAuto2.id}_in_0` });
+          wires.push({ from: `${n5.id}_out_0`, to: `${aAuto2.id}_in_1` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${oCondition.id}_in_0` });
+          wires.push({ from: `${aAuto2.id}_out_0`, to: `${oCondition.id}_in_1` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${aFinal.id}_in_0` });
+          wires.push({ from: `${oCondition.id}_out_0`, to: `${aFinal.id}_in_1` });
+          wires.push({ from: `${aFinal.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+
+      11: {
+        title: "STAGE 11 : 廊下・階段の3路スイッチ（XOR回路）",
+        purpose: "1階と2階のどちらのスイッチを押しても、階段のライトの状態（点灯/消灯）が切り替わる回路です。",
+        inputs: "・1階スイッチ (0/1) / ・2階スイッチ (0/1)",
+        goal: "「どちらか一方のスイッチだけがON(1)」のときに、階段照明を「1(点灯)」にさせよう！",
+        point: "両方の入力が「異なる(0と1, 1と0)」ときだけ1を出力する「XOR（排他的論理和）」を使います。",
+        hint: "2つのスイッチの信号を「XOR回路」にそのまま入力し、階段照明へ配線しましょう。",
+        gates: "使用ゲート: XOR回路 × 1",
+        setup: () => {
+          createComponent('switch', 80, 140, '1階スイッチ');
+          createComponent('switch', 80, 260, '2階スイッチ');
+          createComponent('bulb', 480, 200, '階段照明');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 80, 140, '1階スイッチ');
+          const s2 = createComponent('switch', 80, 260, '2階スイッチ');
+          const x1 = createComponent('XOR', 280, 200);
+          const b1 = createComponent('bulb', 480, 200, '階段照明');
+          s1.state = true; s2.state = false;
+          wires.push({ from: `${s1.id}_out_0`, to: `${x1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${x1.id}_in_1` });
+          wires.push({ from: `${x1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      12: {
+        title: "STAGE 12 : スマートホームの不在時省エネ防犯（NAND + XOR）",
+        purpose: "主電源ON時に、「『家族全員のスマホが不在(0＆0➔1)』かつ『人感センサーとドア開閉の状態が不一致(XOR=1)』」で防犯ライトを点灯。",
+        inputs: "・父スマホ在宅 / ・母スマホ在宅 / ・人感センサー (1:反応) / ・ドア開閉 (1:開)",
+        goal: "「全員不在(NAND=1)」かつ「侵入疑い(センサーとドアの不一致 XOR=1)」の条件をクリアしよう！",
+        point: "「両方1（在宅）のとき0」を出力するNAND回路と、「どちらか一方のみ1（不一致）」のXOR回路を組み合わさせます。",
+        hint: "父・母のスマホをNAND回路へ。人感・ドアをXOR回路へ。それぞれの出力をAND回路で接続します。",
+        gates: "使用ゲート: NAND回路 × 1, XOR回路 × 1, AND回路 × 1",
+        setup: () => {
+          createComponent('switch', 50, 60, '父スマホ (1:在宅)');
+          createComponent('switch', 50, 140, '母スマホ (1:在宅)');
+          createComponent('switch', 50, 240, '人感センサー (1:反応)');
+          createComponent('switch', 50, 320, 'ドア開閉 (1:開)');
+          createComponent('bulb', 550, 190, '防犯ライト');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 50, 60, '父スマホ (1:在宅)');
+          const s2 = createComponent('switch', 50, 140, '母スマホ (1:在宅)');
+          const s3 = createComponent('switch', 50, 240, '人感センサー (1:反応)');
+          const s4 = createComponent('switch', 50, 320, 'ドア開閉 (1:開)');
+
+          const nan1 = createComponent('NAND', 220, 100);
+          const xor1 = createComponent('XOR', 220, 280);
+          const a1 = createComponent('AND', 380, 190);
+          const b1 = createComponent('bulb', 560, 190, '防犯ライト');
+
+          s1.state = false; s2.state = false; s3.state = true; s4.state = false;
+
+          wires.push({ from: `${s1.id}_out_0`, to: `${nan1.id}_in_0` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${nan1.id}_in_1` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${xor1.id}_in_0` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${xor1.id}_in_1` });
+          wires.push({ from: `${nan1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${xor1.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      13: {
+        title: "STAGE 13 : 全自動洗濯機の安全ロック（NAND + AND + OR）",
+        purpose: "「スタートON(1)」で「『フタが開いている＆高速回転中』という『危険状態(1＆1)ではない(NAND=1)』」かつ「チャイルドロックON(1) または 正常終了(1)」のときにドラム回転。",
+        inputs: "・スタートボタン / ・フタ開状態 (1:開) / ・ドラム高速回転中 (1:回転) / ・チャイルドロック (1:ON)",
+        goal: "危険な状態（フタが開いたまま高速回転）を禁止しつつ、安全にドラムモーターを回そう！",
+        point: "危険フラグ（フタ開1＆高速1）をNAND回路に通して「危険時以外=1」を作ります。",
+        hint: "フタ開と高速回転をNANDへ。スタートボタンとそのNAND結果をANDへ。最後にチャイルドロック等と判定します。",
+        gates: "使用ゲート: NAND回路 × 1, AND回路 × 2",
+        setup: () => {
+          createComponent('switch', 50, 60, 'スタートSW (1:ON)');
+          createComponent('switch', 50, 140, 'フタ状態 (1:開)');
+          createComponent('switch', 50, 220, '高速回転 (1:回転中)');
+          createComponent('switch', 50, 300, 'チャイルドロック (1:ON)');
+          createComponent('bulb', 580, 180, 'ドラムモーター');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 50, 60, 'スタートSW (1:ON)');
+          const s2 = createComponent('switch', 50, 140, 'フタ状態 (1:開)');
+          const s3 = createComponent('switch', 50, 220, '高速回転 (1:回転中)');
+          const s4 = createComponent('switch', 50, 300, 'チャイルドロック (1:ON)');
+
+          const nan1 = createComponent('NAND', 200, 180);
+          const a1 = createComponent('AND', 330, 100);
+          const a2 = createComponent('AND', 450, 180);
+          const b1 = createComponent('bulb', 600, 180, 'ドラムモーター');
+
+          s1.state = true; s2.state = false; s3.state = true; s4.state = true;
+
+          wires.push({ from: `${s2.id}_out_0`, to: `${nan1.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${nan1.id}_in_1` });
+          wires.push({ from: `${s1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${nan1.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${a2.id}_in_0` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${a2.id}_in_1` });
+          wires.push({ from: `${a2.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      14: {
+        title: "STAGE 14 : ロボット掃除機の段差・障害物回避AI（XOR + NOR + AND）",
+        purpose: "「『左障害物と右障害物の片方のみ検知(XOR=1)』または『崖センサー両方とも検知なし(NOR=1)』」のときに「電源ON(1)」であれば方向修正モーターを回転。",
+        inputs: "・メイン電源 (1:ON) / ・左障害物 (1:有) / ・右障害物 (1:有) / ・左崖センサー (1:落下危険) / ・右崖センサー (1:落下危険)",
+        goal: "障害物・危険段差の条件を正確に評価し、回避制御モーターを「1」で作動させよう！",
+        point: "両方0のとき1を返す「NOR（否定論理和）」と、片方のみ1の「XOR」を活用します。",
+        hint: "左右障害物をXORへ、左右崖センサーをNORへ入力。両者のOR判定結果とメイン電源をANDで繋ぎます。",
+        gates: "使用ゲート: XOR回路 × 1, NOR回路 × 1, OR回路 × 1, AND回路 × 1",
+        setup: () => {
+          createComponent('switch', 40, 40, 'メイン電源 (1:ON)');
+          createComponent('switch', 40, 110, '左障害物 (1:有)');
+          createComponent('switch', 40, 180, '右障害物 (1:有)');
+          createComponent('switch', 40, 250, '左崖センサー (1:危険)');
+          createComponent('switch', 40, 320, '右崖センサー (1:危険)');
+          createComponent('bulb', 620, 180, '回避モーター');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 40, 40, 'メイン電源 (1:ON)');
+          const s2 = createComponent('switch', 40, 110, '左障害物 (1:有)');
+          const s3 = createComponent('switch', 40, 180, '右障害物 (1:有)');
+          const s4 = createComponent('switch', 40, 250, '左崖センサー (1:危険)');
+          const s5 = createComponent('switch', 40, 320, '右崖センサー (1:危険)');
+
+          const xor1 = createComponent('XOR', 200, 140);
+          const nor1 = createComponent('NOR', 200, 280);
+          const o1 = createComponent('OR', 340, 200);
+          const a1 = createComponent('AND', 480, 120);
+          const b1 = createComponent('bulb', 640, 180, '回避モーター');
+
+          s1.state = true; s2.state = true; s3.state = false; s4.state = false; s5.state = false;
+
+          wires.push({ from: `${s2.id}_out_0`, to: `${xor1.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${xor1.id}_in_1` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${nor1.id}_in_0` });
+          wires.push({ from: `${s5.id}_out_0`, to: `${nor1.id}_in_1` });
+          wires.push({ from: `${xor1.id}_out_0`, to: `${o1.id}_in_0` });
+          wires.push({ from: `${nor1.id}_out_0`, to: `${o1.id}_in_1` });
+          wires.push({ from: `${s1.id}_out_0`, to: `${a1.id}_in_0` });
+          wires.push({ from: `${o1.id}_out_0`, to: `${a1.id}_in_1` });
+          wires.push({ from: `${a1.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      },
+      15: {
+        title: "STAGE 15 : 最高機密生体認証ゲート（複合論理・最難関）",
+        purpose: "「緊急ロックなし(NOT=1)」の状態で、「『パスワード一致(1)＆(顔認証1 OR 指紋認証1)』または『管理者カード所持(1)＆マスター鍵(1)』」のときにゲート解放。",
+        inputs: "・緊急ロック (1:作動/0:無) / ・パスワード (1:一致) / ・顔認証 (1:一致) / ・指紋認証 (1:一致) / ・管理者カード (1:有) / ・マスター鍵 (1:有)",
+        goal: "情報セキュリティの結晶！複雑な組み合わせ回路を完成させ、セキュリティゲートを解錠せよ！",
+        point: "認証ルートA（パスワード＆生体）と認証ルートB（管理者＆鍵）をORでまとめ、緊急ロック(NOT)とANDで合体！",
+        hint: "顔・指紋をOR判定➔パスワードとAND判定(ルートA)。管理者と鍵をAND判定(ルートB)。AとBをOR判定し、緊急ロック(NOT)とAND接続。",
+        gates: "使用ゲート: NOT回路 × 1, OR回路 × 2, AND回路 × 3",
+        setup: () => {
+          createComponent('switch', 40, 30, '緊急ロック (1:作動)');
+          createComponent('switch', 40, 90, 'パスワード (1:一致)');
+          createComponent('switch', 40, 150, '顔認証 (1:一致)');
+          createComponent('switch', 40, 210, '指紋認証 (1:一致)');
+          createComponent('switch', 40, 270, '管理者カード (1:有)');
+          createComponent('switch', 40, 330, 'マスター鍵 (1:有)');
+          createComponent('bulb', 640, 180, 'セキュリティゲート');
+        },
+        solve: () => {
+          components = []; wires = []; nextId = 1;
+          const s1 = createComponent('switch', 40, 30, '緊急ロック (1:作動)');
+          const s2 = createComponent('switch', 40, 90, 'パスワード (1:一致)');
+          const s3 = createComponent('switch', 40, 150, '顔認証 (1:一致)');
+          const s4 = createComponent('switch', 40, 210, '指紋認証 (1:一致)');
+          const s5 = createComponent('switch', 40, 270, '管理者カード (1:有)');
+          const s6 = createComponent('switch', 40, 330, 'マスター鍵 (1:有)');
+
+          const n1 = createComponent('NOT', 180, 30);
+          const oBio = createComponent('OR', 180, 180);
+          const aA = createComponent('AND', 300, 120);
+          const aB = createComponent('AND', 300, 300);
+          const oRoute = createComponent('OR', 420, 200);
+          const aFinal = createComponent('AND', 530, 110);
+          const b1 = createComponent('bulb', 660, 180, 'セキュリティゲート');
+
+          s1.state = false; s2.state = true; s3.state = true; s4.state = false; s5.state = false; s6.state = false;
+
+          wires.push({ from: `${s1.id}_out_0`, to: `${n1.id}_in_0` });
+          wires.push({ from: `${s3.id}_out_0`, to: `${oBio.id}_in_0` });
+          wires.push({ from: `${s4.id}_out_0`, to: `${oBio.id}_in_1` });
+          wires.push({ from: `${s2.id}_out_0`, to: `${aA.id}_in_0` });
+          wires.push({ from: `${oBio.id}_out_0`, to: `${aA.id}_in_1` });
+          wires.push({ from: `${s5.id}_out_0`, to: `${aB.id}_in_0` });
+          wires.push({ from: `${s6.id}_out_0`, to: `${aB.id}_in_1` });
+          wires.push({ from: `${aA.id}_out_0`, to: `${oRoute.id}_in_0` });
+          wires.push({ from: `${aB.id}_out_0`, to: `${oRoute.id}_in_1` });
+          wires.push({ from: `${n1.id}_out_0`, to: `${aFinal.id}_in_0` });
+          wires.push({ from: `${oRoute.id}_out_0`, to: `${aFinal.id}_in_1` });
+          wires.push({ from: `${aFinal.id}_out_0`, to: `${b1.id}_in_0` });
+        }
+      }
+    };
+
+    function dragStartFromPalette(e, type) { e.dataTransfer.setData("paletteType", type); }
+    function allowDrop(e) { e.preventDefault(); }
+
+    function dropFromPalette(e) {
+      e.preventDefault();
+      const type = e.dataTransfer.getData("paletteType");
+      if (!type) return;
+      const rect = document.getElementById('workspace').getBoundingClientRect();
+      createComponent(type, Math.max(20, e.clientX - rect.left - 50), Math.max(20, e.clientY - rect.top - 30));
+    }
+
+    function createComponent(type, x, y, customLabel = null) {
+      const id = `comp_${nextId++}`;
+      const comp = { id, type, x, y, state: false, inputs: [], outputs: [], label: customLabel };
+
+      if (type === 'switch') comp.outputs = [{ id: `${id}_out_0`, value: false }];
+      else if (type === 'bulb') comp.inputs = [{ id: `${id}_in_0`, value: false }];
+      else if (type === 'NOT') {
+        comp.inputs = [{ id: `${id}_in_0`, value: false }];
+        comp.outputs = [{ id: `${id}_out_0`, value: false }];
+      } else if (['AND', 'OR', 'XOR', 'NAND', 'NOR'].includes(type)) {
+        comp.inputs = [{ id: `${id}_in_0`, value: false }, { id: `${id}_in_1`, value: false }];
+        comp.outputs = [{ id: `${id}_out_0`, value: false }];
+      }
+
+      components.push(comp);
+      render();
+      updateCircuit();
+      return comp;
+    }
+
+    function removeComponent(id) {
+      components = components.filter(c => c.id !== id);
+      wires = wires.filter(w => !w.from.startsWith(id) && !w.to.startsWith(id));
+      render();
+      updateCircuit();
+    }
+
+    function toggleSwitch(id) {
+      const comp = components.find(c => c.id === id);
+      if (comp && comp.type === 'switch') {
+        comp.state = !comp.state;
+        comp.outputs[0].value = comp.state;
+        updateCircuit();
+      }
+    }
+
+    function startMovingComponent(e, id) {
+      if (e.target.closest('button') || e.target.classList.contains('node')) return;
+      draggingComponent = components.find(c => c.id === id);
+      if (!draggingComponent) return;
+
+      const rect = document.getElementById(id).getBoundingClientRect();
+      dragOffsetX = e.clientX - rect.left;
+      dragOffsetY = e.clientY - rect.top;
+
+      window.addEventListener('mousemove', moveComponent);
+      window.addEventListener('mouseup', stopMovingComponent);
+    }
+
+    function moveComponent(e) {
+      if (!draggingComponent) return;
+      const wsRect = document.getElementById('workspace').getBoundingClientRect();
+      let x = Math.max(10, Math.min(e.clientX - wsRect.left - dragOffsetX, wsRect.width - 130));
+      let y = Math.max(10, Math.min(e.clientY - wsRect.top - dragOffsetY, wsRect.height - 90));
+
+      draggingComponent.x = x;
+      draggingComponent.y = y;
+      const el = document.getElementById(draggingComponent.id);
+      if (el) { el.style.left = `${x}px`; el.style.top = `${y}px`; }
+      renderWires();
+    }
+
+    function stopMovingComponent() {
+      draggingComponent = null;
+      window.removeEventListener('mousemove', moveComponent);
+      window.removeEventListener('mouseup', stopMovingComponent);
+    }
+
+    function handleNodeClick(nodeId) {
+      if (!wireStartNode) {
+        wireStartNode = nodeId;
+        highlightNode(nodeId, true);
+      } else {
+        if (wireStartNode !== nodeId) {
+          const isStartOut = wireStartNode.includes('_out_');
+          const isEndIn = nodeId.includes('_in_');
+
+          if (isStartOut && isEndIn) {
+            wires = wires.filter(w => w.to !== nodeId);
+            wires.push({ from: wireStartNode, to: nodeId });
+          } else if (!isStartOut && !isEndIn) {
+            const isStartIn = wireStartNode.includes('_in_');
+            const isEndOut = nodeId.includes('_out_');
+            if (isStartIn && isEndOut) {
+              wires = wires.filter(w => w.to !== wireStartNode);
+              wires.push({ from: nodeId, to: wireStartNode });
+            }
+          }
+        }
+        highlightNode(wireStartNode, false);
+        wireStartNode = null;
+        updateCircuit();
+      }
+    }
+
+    function highlightNode(nodeId, enable) {
+      const el = document.getElementById(nodeId);
+      if (el) {
+        if (enable) el.classList.add('ring-4', 'ring-amber-400');
+        else el.classList.remove('ring-4', 'ring-amber-400');
+      }
+    }
+
+    function updateCircuit() {
+      for (let iter = 0; iter < 12; iter++) {
+        wires.forEach(w => {
+          const fromComp = components.find(c => c.outputs.some(o => o.id === w.from));
+          const toComp = components.find(c => c.inputs.some(i => i.id === w.to));
+          if (fromComp && toComp) {
+            const outObj = fromComp.outputs.find(o => o.id === w.from);
+            const inObj = toComp.inputs.find(i => i.id === w.to);
+            if (outObj && inObj) inObj.value = outObj.value;
+          }
+        });
+
+        components.forEach(c => {
+          if (c.type === 'switch') c.outputs[0].value = c.state;
+          else if (c.type === 'NOT') c.outputs[0].value = !c.inputs[0].value;
+          else if (c.type === 'AND') c.outputs[0].value = Boolean(c.inputs[0].value && c.inputs[1].value);
+          else if (c.type === 'OR') c.outputs[0].value = Boolean(c.inputs[0].value || c.inputs[1].value);
+          else if (c.type === 'XOR') c.outputs[0].value = Boolean(c.inputs[0].value !== c.inputs[1].value);
+          else if (c.type === 'NAND') c.outputs[0].value = !Boolean(c.inputs[0].value && c.inputs[1].value);
+          else if (c.type === 'NOR') c.outputs[0].value = !Boolean(c.inputs[0].value || c.inputs[1].value);
+          else if (c.type === 'bulb') c.state = Boolean(c.inputs[0].value);
+        });
+      }
+
+      renderWires();
+      updateVisuals();
+      checkGameClear();
+    }
+
+    function render() {
+      const container = document.getElementById('nodesContainer');
+      container.innerHTML = '';
+
+      components.forEach(c => {
+        const div = document.createElement('div');
+        div.id = c.id;
+        div.className = `absolute bg-white border-2 rounded-2xl shadow-md p-3 z-20 flex flex-col items-center justify-between min-w-[120px] cursor-move transition-shadow ${c.type === 'bulb' && c.state ? 'border-amber-400 shadow-amber-300/60 shadow-lg' : 'border-slate-300 hover:border-blue-400'}`;
+        div.style.left = `${c.x}px`;
+        div.style.top = `${c.y}px`;
+        div.onmousedown = (e) => startMovingComponent(e, c.id);
+
+        const header = document.createElement('div');
+        header.className = 'w-full flex justify-between items-center mb-1 pointer-events-none gap-2';
+        header.innerHTML = `<span class="text-[10px] font-bold text-slate-500 truncate">${c.label || c.type}</span>
+          <button onclick="removeComponent('${c.id}')" class="text-slate-300 hover:text-rose-500 text-xs pointer-events-auto p-0.5">✕</button>`;
+        div.appendChild(header);
+
+        const body = document.createElement('div');
+        body.className = 'my-1 flex items-center justify-center';
+        if (c.type === 'switch') {
+          body.innerHTML = `<button id="btn_${c.id}" onclick="toggleSwitch('${c.id}')" class="px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-sm ${c.state ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-300'}">
+            ${c.state ? 'ON (1)' : 'OFF (0)'}</button>`;
+        } else if (c.type === 'bulb') {
+          body.innerHTML = `<i id="bulb_icon_${c.id}" class="fa-solid fa-lightbulb text-3xl transition-all duration-200 ${c.state ? 'bulb-on' : 'text-slate-300'}"></i>`;
+        } else {
+          body.innerHTML = `<span class="font-black text-base text-slate-700 tracking-wider">${c.type}</span>`;
+        }
+        div.appendChild(body);
+
+        c.inputs.forEach((inp, idx) => {
+          const node = document.createElement('div');
+          node.id = inp.id;
+          node.className = `node input-node ${inp.value ? 'active' : ''}`;
+          node.style.top = `${(idx + 1) * (100 / (c.inputs.length + 1))}%`;
+          node.onclick = (e) => { e.stopPropagation(); handleNodeClick(inp.id); };
+          div.appendChild(node);
+        });
+
+        c.outputs.forEach((out, idx) => {
+          const node = document.createElement('div');
+          node.id = out.id;
+          node.className = `node output-node ${out.value ? 'active' : ''}`;
+          node.style.top = `${(idx + 1) * (100 / (c.outputs.length + 1))}%`;
+          node.onclick = (e) => { e.stopPropagation(); handleNodeClick(out.id); };
+          div.appendChild(node);
+        });
+
+        container.appendChild(div);
+      });
+
+      renderWires();
+    }
+
+    function updateVisuals() {
+      components.forEach(c => {
+        c.inputs.forEach(inp => {
+          const el = document.getElementById(inp.id);
+          if (el) el.className = `node input-node ${inp.value ? 'active' : ''}`;
+        });
+        c.outputs.forEach(out => {
+          const el = document.getElementById(out.id);
+          if (el) el.className = `node output-node ${out.value ? 'active' : ''}`;
+        });
+
+        if (c.type === 'switch') {
+          const btn = document.getElementById(`btn_${c.id}`);
+          if (btn) {
+            btn.innerText = c.state ? 'ON (1)' : 'OFF (0)';
+            btn.className = `px-3 py-1.5 rounded-xl font-bold text-xs transition shadow-sm ${c.state ? 'bg-emerald-500 text-white shadow-emerald-200' : 'bg-slate-100 text-slate-500 border border-slate-300'}`;
+          }
+        }
+
+        if (c.type === 'bulb') {
+          const icon = document.getElementById(`bulb_icon_${c.id}`);
+          const card = document.getElementById(c.id);
+          if (icon) icon.className = `fa-solid fa-lightbulb text-3xl transition-all duration-200 ${c.state ? 'bulb-on' : 'text-slate-300'}`;
+          if (card) {
+            if (c.state) card.classList.add('border-amber-400', 'shadow-amber-300/60', 'shadow-lg');
+            else card.classList.remove('border-amber-400', 'shadow-amber-300/60', 'shadow-lg');
+          }
+        }
+      });
+    }
+
+    function renderWires() {
+      const svg = document.getElementById('wireSvg');
+      svg.innerHTML = '';
+
+      wires.forEach(w => {
+        const fromEl = document.getElementById(w.from);
+        const toEl = document.getElementById(w.to);
+        if (!fromEl || !toEl) return;
+
+        const r1 = fromEl.getBoundingClientRect();
+        const r2 = toEl.getBoundingClientRect();
+        const wRect = document.getElementById('workspace').getBoundingClientRect();
+
+        const x1 = r1.left + r1.width/2 - wRect.left;
+        const y1 = r1.top + r1.height/2 - wRect.top;
+        const x2 = r2.left + r2.width/2 - wRect.left;
+        const y2 = r2.top + r2.height/2 - wRect.top;
+
+        const fromComp = components.find(c => c.outputs.some(o => o.id === w.from));
+        const isActive = fromComp ? fromComp.outputs.find(o => o.id === w.from).value : false;
+
+        const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        const dx = Math.abs(x2 - x1) * 0.5;
+        path.setAttribute('d', `M ${x1} ${y1} C ${x1 + dx} ${y1}, ${x2 - dx} ${y2}, ${x2} ${y2}`);
+        path.setAttribute('stroke', isActive ? '#ef4444' : '#cbd5e1');
+        path.setAttribute('stroke-width', isActive ? '4' : '3');
+        path.setAttribute('fill', 'none');
+        svg.appendChild(path);
+      });
+    }
+
+    function checkGameClear() {
+      if (currentStage === 0 || isStageCleared) return;
+
+      const switches = components.filter(c => c.type === 'switch');
+      const bulbs = components.filter(c => c.type === 'bulb');
+      if (bulbs.length === 0) return;
+
+      const hasUnconnectedInput = components.some(c => {
+        if (c.type === 'switch') return false;
+        return c.inputs.some(inp => !wires.some(w => w.to === inp.id));
+      });
+      if (hasUnconnectedInput) return;
+
+      const bulb = bulbs[0];
+      const getVal = (idx) => switches[idx] ? switches[idx].state : false;
+
+      let isCorrect = false;
+
+      if (currentStage === 1) {
+        isCorrect = getVal(0) === true && bulb.state === true;
+      } else if (currentStage === 2) {
+        const hasNOT = components.some(c => c.type === 'NOT');
+        isCorrect = hasNOT && getVal(0) === false && bulb.state === true;
+      } else if (currentStage === 3) {
+        const hasAND = components.some(c => c.type === 'AND');
+        isCorrect = hasAND && (getVal(0) && getVal(1)) && bulb.state === true;
+      } else if (currentStage === 4) {
+        const hasOR = components.some(c => c.type === 'OR');
+        isCorrect = hasOR && (getVal(0) || getVal(1)) && bulb.state === true;
+      } else if (currentStage === 5) {
+        const expected = getVal(0) && (getVal(1) || getVal(2));
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 6) {
+        const expected = getVal(0) || (getVal(1) && !getVal(2));
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 7) {
+        const expected = getVal(0) && getVal(1) && !getVal(2);
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 8) {
+        const expected = !getVal(0) && getVal(1) && (getVal(2) || !getVal(3));
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 9) {
+        const condA = getVal(0) && getVal(1);
+        const condB = getVal(2) && getVal(1) && (getVal(3) || getVal(4));
+        const expected = condA || condB;
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 10) {
+        const condAuto = getVal(2) && getVal(3) && !getVal(4);
+        const expected = !getVal(0) && (getVal(1) || condAuto);
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 11) {
+        const expected = (getVal(0) !== getVal(1));
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 12) {
+        const expected = !(getVal(0) && getVal(1)) && (getVal(2) !== getVal(3));
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 13) {
+        const expected = getVal(0) && !(getVal(1) && getVal(2)) && getVal(3);
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 14) {
+        const condXOR = (getVal(1) !== getVal(2));
+        const condNOR = !(getVal(3) || getVal(4));
+        const expected = getVal(0) && (condXOR || condNOR);
+        isCorrect = expected && bulb.state === true;
+      } else if (currentStage === 15) {
+        const routeA = getVal(1) && (getVal(2) || getVal(3));
+        const routeB = getVal(4) && getVal(5);
+        const expected = !getVal(0) && (routeA || routeB);
+        isCorrect = expected && bulb.state === true;
+      }
+
+      if (isCorrect) {
+        triggerClear();
+      }
+    }
+
+    function triggerClear() {
+      isStageCleared = true;
+      playSound();
+      if (!suppressClearOverlay) {
+        setTimeout(() => {
+          document.getElementById('clearOverlay').classList.remove('hidden');
+        }, 300);
+      }
+    }
+
+    function dismissClearOverlay() {
+      document.getElementById('clearOverlay').classList.add('hidden');
+    }
+
+    function playSound() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, ctx.currentTime);
+        osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.2);
+        osc.frequency.setValueAtTime(1046.50, ctx.currentTime + 0.3);
+        gain.gain.setValueAtTime(0.1, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.6);
+      } catch(e){}
+    }
+
+    function openHint() {
+      if (currentStage > 0 && stages[currentStage]) {
+        document.getElementById('modalHintText').innerText = `${stages[currentStage].purpose}\n\n💡ヒント:\n${stages[currentStage].hint}`;
+        document.getElementById('modalGatesText').innerText = stages[currentStage].gates;
+        document.getElementById('hintOverlay').classList.remove('hidden');
+      }
+    }
+
+    function closeHint() {
+      document.getElementById('hintOverlay').classList.add('hidden');
+    }
+
+    function showAnswer() {
+      if (confirm("模範解答の回路をワークスペースに自動配置しますか？")) {
+        closeHint();
+        suppressClearOverlay = true;
+        if (currentStage > 0 && stages[currentStage] && stages[currentStage].solve) {
+          stages[currentStage].solve();
+          render();
+          updateCircuit();
+        }
+        setTimeout(() => { suppressClearOverlay = false; }, 1000);
+      }
+    }
+
+    function nextStage() {
+      document.getElementById('clearOverlay').classList.add('hidden');
+      const select = document.getElementById('stageSelect');
+      if (currentStage < 15) {
+        select.value = currentStage + 1;
+        changeStage();
+      } else {
+        select.value = 0;
+        changeStage();
+      }
+    }
+
+    function changeStage() {
+      const select = document.getElementById('stageSelect');
+      currentStage = parseInt(select.value);
+      resetStage();
+    }
+
+    function resetStage() {
+      components = [];
+      wires = [];
+      nextId = 1;
+      isStageCleared = false;
+      suppressClearOverlay = false;
+
+      const bar = document.getElementById('missionBar');
+      if (currentStage > 0 && stages[currentStage]) {
+        const s = stages[currentStage];
+        bar.classList.remove('hidden');
+        document.getElementById('missionTitleText').innerText = s.title;
+        document.getElementById('missionPurpose').innerText = s.purpose;
+        document.getElementById('missionInputs').innerText = s.inputs;
+        document.getElementById('missionGoal').innerText = s.goal;
+        document.getElementById('missionHint').innerText = s.point;
+
+        s.setup();
+      } else {
+        bar.classList.add('hidden');
+        render();
+      }
+    }
+
+    function shareState() {
+      const data = { components: components.map(c => ({ id: c.id, type: c.type, x: c.x, y: c.y, state: c.state, label: c.label })), wires, nextId };
+      const shareUrl = `${window.location.origin}${window.location.pathname}?state=${encodeURIComponent(JSON.stringify(data))}`;
+      navigator.clipboard.writeText(shareUrl).then(() => alert("URLをコピーしました！")).catch(() => prompt("URL:", shareUrl));
+    }
+
+    window.onload = () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const stateParam = urlParams.get('state');
+      if (stateParam) {
+        try {
+          const data = JSON.parse(decodeURIComponent(stateParam));
+          components = data.components.map(c => ({
+            ...c,
+            inputs: c.type === 'switch' ? [] : (c.type === 'NOT' || c.type === 'bulb' ? [{id:`${c.id}_in_0`, value:false}] : [{id:`${c.id}_in_0`, value:false},{id:`${c.id}_in_1`, value:false}]),
+            outputs: c.type === 'bulb' ? [] : [{id:`${c.id}_out_0`, value:c.state}]
+          }));
+          wires = data.wires || [];
+          nextId = data.nextId || (components.length + 1);
+          render();
+          updateCircuit();
+        } catch(e){}
+      }
+    };
+    window.onresize = renderWires;
+  </script>
+</body>
+</html>
